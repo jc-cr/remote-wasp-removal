@@ -5,25 +5,57 @@
     - https://play.google.com/store/apps/details?id=com.siliconlabs.bledemo
     - https://apps.apple.com/us/app/efr-connect-ble-mobile-app/id1030932759
 
+  
+
 
 
    Original Author: Tamas Jozsi (Silicon Labs)
    Modified by: JC
  */
 
+#include <pwm.h>
+#include <Arduino.h>
+
+// Define constants
+const int SERVO_PIN = A0;
+const int minPulse = 500;  // Minimum pulse width in microseconds (0 degrees)
+const int maxPulse = 2500; // Maximum pulse width in microseconds (180 degrees)
+volatile bool swipe_state = false;
+
+int EXT_LED_PIN = D10;
+
 bool btn_notification_enabled = false;
 bool btn_state_changed = false;
 uint8_t btn_state = LOW;
+
+
 static void btn_state_change_callback();
 static void send_button_state_notification();
 static void set_led_on(bool state);
-static void toggle_swiping(bool state);
+
+static void setServoAngle(int angle);
+static void sweepServo();
 
 void setup()
 {
   pinMode(LED_BUILTIN, OUTPUT);
+
+  pinMode(EXT_LED_PIN, OUTPUT);
+
+  digitalWrite(EXT_LED_PIN, HIGH);
+ 
+ 
+   // Set PWM resolution to 12 bits for finer control
+  analogWriteResolution(12);
+  
+  // Set PWM frequency to 50Hz (standard for most servos)
+  PWM.frequency_mode(PinName(SERVO_PIN), 50);
+
+
   digitalWrite(LED_BUILTIN, LED_BUILTIN_INACTIVE);
   set_led_on(false);
+
+
   Serial.begin(115200);
   Serial.println("Silicon Labs BLE blinky example");
 
@@ -37,13 +69,50 @@ void setup()
   #endif // BTN_BUILTIN
 }
 
+
+
 void loop()
 {
   if (btn_state_changed) {
     btn_state_changed = false;
     send_button_state_notification();
   }
+
+   if (swipe_state) {
+    sweepServo();
+  } else {
+
+  }
+
 }
+
+
+static void setServoAngle(int angle) {
+  int pulseWidth = map(angle, 0, 180, minPulse, maxPulse);
+  
+  digitalWrite(SERVO_PIN, HIGH);
+  delayMicroseconds(pulseWidth);
+  digitalWrite(SERVO_PIN, LOW);
+  delayMicroseconds(20000 - pulseWidth);  // Complete the 20ms cycle
+}
+
+static void sweepServo() {
+  // Sweep from 0 to 180 degrees
+  for (int angle = 0; angle <= 180; angle += 2) {
+    setServoAngle(angle);
+    delay(5);  // Adjust this delay for desired speed
+  }
+  
+  // Quick reset to 0 degrees
+  setServoAngle(0);
+   delay(5);  // Adjust this delay for desired speed
+
+}
+
+
+
+
+
 
 static void ble_initialize_gatt_db();
 static void ble_start_advertising();
@@ -113,14 +182,17 @@ void sl_bt_on_event(sl_bt_msg_t *evt)
         if (received_data == 0x00) 
         {
           set_led_on(false);
-          toggle_swiping(false);
+          swipe_state = false;
+          
+
           Serial.println("LED off");
           Serial.println("Swiping off!");
           
         } else if (received_data == 0x01) 
         {
           set_led_on(true);
-          toggle_swiping(true);
+          swipe_state = true;
+          
           Serial.println("LED on");
           Serial.println("Swiping on!");
         }
@@ -187,27 +259,15 @@ static void send_button_state_notification()
 
 static void set_led_on(bool state)
 {
-  if (state) {
+
+  if (state) 
+  {
     digitalWrite(LED_BUILTIN, LED_BUILTIN_ACTIVE);
   } else {
     digitalWrite(LED_BUILTIN, LED_BUILTIN_INACTIVE);
   }
 }
 
-
-static void toggle_swiping(bool state)
-{
-  if(state)
-  {
-
-  }
-  else
-  {
-    
-  
-  }
-  
-}
 
 /**************************************************************************//**
  * Starts BLE advertisement
